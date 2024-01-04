@@ -1,3 +1,7 @@
+# In terms of what was completed
 
 
-aws s3 cp test.txt s3://a-bucket/test.txt --metadata '{"x-amz-meta-cms-id":"34533452"}'
+* The Confirmation Mailer lambda is now a direct subscriber to topic 1 (no intermediate queue).
+* Writing an item to the DynamoDB table. 
+* DLQ (Code is correct but not sure how to trigger a message to go into the DLQ)
+* Emails Sent to my verified address

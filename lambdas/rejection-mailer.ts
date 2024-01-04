@@ -1,5 +1,4 @@
-import {SNSHandler, SQSHandler} from "aws-lambda";
-// import AWS from 'aws-sdk';
+import { SNSHandler } from "aws-lambda";
 import { SES_EMAIL_FROM, SES_EMAIL_TO, SES_REGION } from "../env";
 import {
     SESClient,
@@ -9,7 +8,7 @@ import {
 
 if (!SES_EMAIL_TO || !SES_EMAIL_FROM || !SES_REGION) {
     throw new Error(
-        "Please add the SES_EMAIL_TO, SES_EMAIL_FROM and SES_REGION environment variables in an env.ts.js file located in the root directory"
+        "Please add the SES_EMAIL_TO, SES_EMAIL_FROM, and SES_REGION environment variables in an env.ts.js file located in the root directory"
     );
 }
 
@@ -24,27 +23,42 @@ const client = new SESClient({ region: SES_REGION });
 export const handler: SNSHandler = async (event: any) => {
     console.log("Event ", event);
 
+    if (!event.Records || event.Records.length === 0) {
+        console.log("Invalid SNS event format. Missing 'Records'.");
+        // Handle the case where 'Records' is missing in the event
+        return;
+    }
+
     for (const record of event.Records) {
-        const snsMessage = JSON.parse(record.Sns.Message);
+        if (!record.body) {
+            console.log("Invalid SQS message format. Missing 'body'.");
+            // Handle the case where 'body' is missing in the record
+            continue;
+        }
 
-        if (snsMessage.Records) {
-            console.log("SNS Message ", JSON.stringify(snsMessage));
-            for (const messageRecord of snsMessage.Records) {
-                const s3e = messageRecord.s3;
-                const { name, email, message }: ContactDetails = {
-                    name: "The Photo Album",
-                    email: SES_EMAIL_FROM,
-                    message: `We received your Image. Its URL is ${s3e.Message}`,
-                };
+        const sqsMessage = JSON.parse(record.body);
 
-                try {
-                    const params = sendEmailParams({ name, email, message });
-                    await client.send(new SendEmailCommand(params));
-                } catch (error: unknown) {
-                    console.log("ERROR is: ", error);
-                    // Handle error as needed
-                }
-            }
+        if (!sqsMessage.Message || !sqsMessage.Subject) {
+            console.log("Invalid event format. Missing 'Message' or 'Subject'.");
+            continue;
+        }
+
+        console.log("SQS Message ", JSON.stringify(sqsMessage));
+
+        // Removed parsing of S3 message as it's not relevant
+
+        const { name, email, message }: ContactDetails = {
+            name: "The Photo Album",
+            email: SES_EMAIL_FROM,
+            message: `We received your message: ${sqsMessage.Message}`,
+        };
+
+        try {
+            const params = sendEmailParams({ name, email, message });
+            await client.send(new SendEmailCommand(params));
+        } catch (error: unknown) {
+            console.log("ERROR is: ", error);
+            // Handle error as needed
         }
     }
 };
@@ -61,13 +75,13 @@ function sendEmailParams({ name, email, message }: ContactDetails) {
                     Data: getHtmlContent({ name, email, message }),
                 },
                 Text: {
-                  Charset: "UTF-8",
-                  Data: getTextContent({ name, email, message }),
+                    Charset: "UTF-8",
+                    Data: getTextContent({ name, email, message }),
                 },
             },
             Subject: {
                 Charset: "UTF-8",
-                Data: `New image Upload`,
+                Data: `New message received`,
             },
         },
         Source: SES_EMAIL_FROM,
@@ -92,7 +106,7 @@ function getHtmlContent({ name, email, message }: ContactDetails) {
 
 function getTextContent({ name, email, message }: ContactDetails) {
     return `
-    Received an Email. 📬
+    Received a new message. 📬
     Sent from:
         👤 ${name}
         ✉️ ${email}
